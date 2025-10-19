@@ -1,0 +1,19 @@
+[project]
+name = "crawler"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "litestar[standard]",
+    "msgspec",
+    "aioboto3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
