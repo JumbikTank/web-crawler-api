@@ -14,8 +14,8 @@ async def test_create_url_endpoint() -> None:
     mock_dynamo = AsyncMock()
     mock_dynamo.create_url_data.return_value = {
         "url": "https://example.com",
-        "content_hash": "abc123",
-        "s3_link": "s3://bucket/html/abc123.html",
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "s3_link": "s3://bucket/html/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html",
         "last_crawled_time": 1234567890,
     }
 
@@ -29,15 +29,18 @@ async def test_create_url_endpoint() -> None:
             "/urls",
             json={
                 "url": "https://example.com",
-                "content_hash": "abc123",
-                "s3_link": "s3://bucket/html/abc123.html",
+                "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "s3_link": "s3://bucket/html/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html",
             },
         )
 
         assert response.status_code == 201
         data = response.json()
         assert data["url"] == "https://example.com"
-        assert data["content_hash"] == "abc123"
+        assert (
+            data["content_hash"]
+            == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        )
 
 
 @pytest.mark.asyncio
@@ -46,8 +49,8 @@ async def test_get_url_endpoint_found() -> None:
     mock_dynamo = AsyncMock()
     mock_dynamo.get_url_data.return_value = {
         "url": "https://example.com",
-        "content_hash": "abc123",
-        "s3_link": "s3://bucket/html/abc123.html",
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "s3_link": "s3://bucket/html/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html",
         "last_crawled_time": 1234567890,
     }
 
@@ -62,7 +65,10 @@ async def test_get_url_endpoint_found() -> None:
         assert response.status_code == 200
         data = response.json()
         assert data["url"] == "https://example.com"
-        assert data["content_hash"] == "abc123"
+        assert (
+            data["content_hash"]
+            == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        )
 
 
 @pytest.mark.asyncio
@@ -79,20 +85,26 @@ async def test_get_url_endpoint_not_found() -> None:
     async with AsyncTestClient(app=app) as client:
         response = await client.get("/url-data?url=https://notfound.com")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data == {}
+        assert response.status_code == 404
+        assert response.json()["detail"] == "URL не найден"
 
 
 @pytest.mark.asyncio
 async def test_save_html_endpoint() -> None:
     """Test POST /html endpoint."""
     mock_s3 = AsyncMock()
-    mock_s3.save_html.return_value = "s3://bucket/html/abc123.html"
+    mock_s3.save_html.return_value = (
+        "s3://bucket/html/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html"
+    )
 
+    mock_dynamo = AsyncMock()
+    mock_dynamo.create_url_data.return_value = {
+        "url": "https://example.com",
+        "s3_link": mock_s3.save_html.return_value,
+    }
     app = Litestar(
         route_handlers=[save_html],
-        state=State({"s3_service": mock_s3}),
+        state=State({"s3_service": mock_s3, "dynamo_service": mock_dynamo}),
     )
 
     async with AsyncTestClient(app=app) as client:
@@ -107,7 +119,10 @@ async def test_save_html_endpoint() -> None:
         assert response.status_code == 201
         data = response.json()
         assert data["url"] == "https://example.com"
-        assert data["s3_link"] == "s3://bucket/html/abc123.html"
+        assert (
+            data["s3_link"]
+            == "s3://bucket/html/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html"
+        )
 
 
 @pytest.mark.asyncio

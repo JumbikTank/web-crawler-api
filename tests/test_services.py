@@ -104,3 +104,65 @@ async def test_s3_save_html_with_content() -> None:
         # SHA-256 hash is 64 characters
         hash_part = result.split("/")[-1].replace(".html", "")
         assert len(hash_part) == 64
+
+
+@pytest.mark.asyncio
+async def test_dynamo_pagination_filter_and_delete() -> None:
+    service = DynamoDBService("test_table", endpoint_url="http://localhost:4566")
+    with patch.object(service.session, "resource") as resource:
+        table = AsyncMock()
+        resource.return_value.__aenter__.return_value.Table.return_value = table
+        table.scan.return_value = {"Items": [], "LastEvaluatedKey": {"url": "https://next.example"}}
+        items, cursor = await service.list_urls(5, "https://previous.example", "a" * 64)
+        assert items == []
+        assert cursor == "https://next.example"
+        table.scan.assert_awaited_once_with(
+            Limit=5,
+            ConsistentRead=True,
+            ExclusiveStartKey={"url": "https://previous.example"},
+            FilterExpression="content_hash = :hash",
+            ExpressionAttributeValues={":hash": "a" * 64},
+        )
+        table.delete_item.return_value = {"Attributes": {"url": "https://next.example"}}
+        assert await service.delete_url("https://next.example")
+        table.delete_item.return_value = {}
+        assert not await service.delete_url("https://next.example")
+
+
+@pytest.mark.asyncio
+async def test_dynamo_stats_across_pages() -> None:
+    service = DynamoDBService("test_table")
+    with patch.object(service.session, "resource") as resource:
+        table = AsyncMock()
+        resource.return_value.__aenter__.return_value.Table.return_value = table
+        table.scan.side_effect = [
+            {"Items": [{"content_hash": "a" * 64}, {}], "LastEvaluatedKey": {"url": "https://a"}},
+            {"Items": [{"content_hash": "a" * 64}, {"content_hash": "b" * 64}]},
+        ]
+        assert await service.stats() == {
+            "total_urls": 4,
+            "with_content": 3,
+            "unique_contents": 2,
+        }
+        assert table.scan.await_count == 2
+        assert table.scan.call_args_list[0].kwargs == {"Limit": 100, "ConsistentRead": True}
+
+
+@pytest.mark.asyncio
+async def test_s3_read_and_missing_object() -> None:
+    from botocore.exceptions import ClientError
+
+    service = S3Service("test_bucket")
+    with patch.object(service.session, "client") as client:
+        s3 = AsyncMock()
+        client.return_value.__aenter__.return_value = s3
+        body = AsyncMock()
+        body.__aenter__.return_value.read.return_value = "Привет".encode()
+        s3.get_object.return_value = {"Body": body}
+        assert await service.get_html("a" * 64) == "Привет"
+        s3.get_object.assert_awaited_once_with(Bucket="test_bucket", Key=f"html/{'a' * 64}.html")
+        s3.get_object.side_effect = ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        assert await service.get_html("b" * 64) is None
+        s3.get_object.side_effect = ClientError({"Error": {"Code": "AccessDenied"}}, "GetObject")
+        with pytest.raises(ClientError):
+            await service.get_html("b" * 64)

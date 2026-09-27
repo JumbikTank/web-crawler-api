@@ -1,5 +1,8 @@
 # Product: Web Crawler System
 
+> Исторический backlog развития распределённого краулера. Это план, а не перечень
+> завершённых функций. Реализованный объём первой части ДЗ описан в [README.md](README.md).
+
 ## User Stories
 
 ### US-1: URL Discovery and Crawling

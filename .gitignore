@@ -36,3 +36,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Local storage and configuration
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.env
+.DS_Store
