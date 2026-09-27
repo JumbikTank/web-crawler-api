@@ -53,3 +53,11 @@ class UrlBatch(Struct, forbid_unknown_fields=True):
     def __post_init__(self) -> None:
         for url in self.urls:
             validate_url(url)
+
+
+class CrawlRequest(Struct, forbid_unknown_fields=True):
+    urls: Annotated[list[Url], Meta(min_length=1, max_length=20)]
+
+    def __post_init__(self) -> None:
+        for url in self.urls:
+            validate_url(url)

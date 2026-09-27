@@ -6,6 +6,9 @@ dependencies = [
     "litestar[standard]",
     "msgspec",
     "aioboto3",
+    "aiohttp>=3.13,<4",
+    "protego>=0.4,<1",
+    "selectolax>=0.4.12,<0.5",
 ]
 
 [project.optional-dependencies]

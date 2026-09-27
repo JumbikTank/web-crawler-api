@@ -15,8 +15,10 @@ from litestar.openapi import OpenAPIConfig
 from litestar.params import Parameter
 
 from crawler.config import Settings
+from crawler.downloader import Downloader, DownloadError
+from crawler.extraction import extract_text
 from crawler.local import SQLiteStorage
-from crawler.models import RawHtmlData, UrlBatch, UrlData, validate_url
+from crawler.models import CrawlRequest, RawHtmlData, UrlBatch, UrlData, validate_url
 from crawler.services import DynamoDBService, S3Service
 
 MetadataStorage = SQLiteStorage | DynamoDBService
@@ -88,6 +90,10 @@ async def create_batch(data: UrlBatch, state: State) -> dict[str, Any]:
 
 @post("/html", summary="Сохранить HTML и связать его с URL")
 async def save_html(data: RawHtmlData, state: State) -> dict[str, Any]:
+    return await archive_html(data, state)
+
+
+async def archive_html(data: RawHtmlData, state: State) -> dict[str, Any]:
     content_hash = hashlib.sha256(data.html_content.encode()).hexdigest()
     html_service: HtmlStorage = state.s3_service
     metadata_service: MetadataStorage = state.dynamo_service
@@ -99,6 +105,10 @@ async def save_html(data: RawHtmlData, state: State) -> dict[str, Any]:
 
 @get("/html", summary="Прочитать сохранённый HTML по URL")
 async def get_html(url: str, state: State) -> dict[str, str]:
+    return await read_html(url, state)
+
+
+async def read_html(url: str, state: State) -> dict[str, str]:
     metadata_service: MetadataStorage = state.dynamo_service
     html_service: HtmlStorage = state.s3_service
     metadata = await metadata_service.get_url_data(checked_url(url))
@@ -111,6 +121,54 @@ async def get_html(url: str, state: State) -> dict[str, str]:
     if html is None:
         raise NotFoundException(detail="HTML для URL не найден")
     return {"url": url, "content_hash": content_hash, "html_content": html}
+
+
+@get("/text", summary="Извлечь текст из сохранённой страницы")
+async def get_text(url: str, state: State) -> dict[str, str]:
+    document = await read_html(url, state)
+    return {
+        "url": url,
+        "content_hash": document["content_hash"],
+        "text": await asyncio.to_thread(extract_text, document["html_content"]),
+    }
+
+
+@post("/crawl", status_code=200, summary="Скачать страницы из заданного списка URL")
+async def crawl(data: CrawlRequest, state: State) -> dict[str, Any]:
+    downloader: Downloader = state.downloader
+
+    async def process(url: str) -> dict[str, Any]:
+        try:
+            page = await downloader.fetch(url)
+            metadata = await archive_html(RawHtmlData(url, page.html), state)
+            return {
+                **metadata,
+                "status": "saved",
+                "final_url": page.final_url,
+                "http_status": page.http_status,
+            }
+        except DownloadError as exc:
+            return {
+                "url": url,
+                "status": "failed",
+                "error": exc.code,
+                "detail": exc.detail,
+                "http_status": exc.http_status,
+            }
+        except (sqlite3.Error, BotoCoreError, ClientError):
+            return {
+                "url": url,
+                "status": "failed",
+                "error": "storage_error",
+                "detail": "Не удалось сохранить страницу",
+            }
+
+    items = await asyncio.gather(*(process(url) for url in dict.fromkeys(data.urls)))
+    return {
+        "items": items,
+        "saved": sum(item["status"] == "saved" for item in items),
+        "failed": sum(item["status"] == "failed" for item in items),
+    }
 
 
 @get("/stats", summary="Статистика URL и уникального содержимого")
@@ -135,6 +193,7 @@ def storage_error(request: Request[Any, Any, Any], exc: Exception) -> Response[d
 def create_app(settings: Settings | None = None) -> Litestar:
     settings = settings or Settings.from_env()
     startup = []
+    downloader = Downloader()
     if settings.backend == "sqlite":
         local = SQLiteStorage(settings.database_path)
 
@@ -148,6 +207,8 @@ def create_app(settings: Settings | None = None) -> Litestar:
         metadata = DynamoDBService(settings.table_name, settings.region, settings.endpoint_url)
         html = S3Service(settings.bucket_name, settings.region, settings.endpoint_url)
 
+    startup.append(downloader.start)
+
     return Litestar(
         route_handlers=[
             create_url,
@@ -157,11 +218,14 @@ def create_app(settings: Settings | None = None) -> Litestar:
             create_batch,
             save_html,
             get_html,
+            get_text,
+            crawl,
             stats,
             health,
         ],
-        state=State({"dynamo_service": metadata, "s3_service": html}),
+        state=State({"dynamo_service": metadata, "s3_service": html, "downloader": downloader}),
         on_startup=startup,
+        on_shutdown=[downloader.close],
         request_max_body_size=8 * 1024 * 1024,
         exception_handlers={
             sqlite3.Error: storage_error,
