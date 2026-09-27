@@ -53,8 +53,8 @@ robots.txt, очереди и обработка миллиардов URL — д
 Команды выполняются из корня репозитория:
 
 ```bash
-git clone --branch codex/homework-part1 https://github.com/JumbikTank/nis_dz.git
-cd nis_dz
+git clone https://github.com/JumbikTank/web-crawler-api.git
+cd web-crawler-api
 uv sync --frozen
 uv run --frozen uvicorn crawler.app:app --host 127.0.0.1 --port 8000
 ```
