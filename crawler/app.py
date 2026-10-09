@@ -82,7 +82,6 @@ async def create_batch(data: UrlBatch, state: State) -> dict[str, Any]:
     service: MetadataStorage = state.dynamo_service
     items = []
     for url in dict.fromkeys(data.urls):
-        # Re-importing a known URL must not erase previously saved HTML metadata.
         item = await service.get_url_data(url)
         items.append(item if item is not None else await service.create_url_data(UrlData(url)))
     return {"items": items, "count": len(items)}
@@ -183,7 +182,6 @@ def health() -> dict[str, str]:
 
 
 def storage_error(request: Request[Any, Any, Any], exc: Exception) -> Response[dict[str, Any]]:
-    # Do not include URLs, request bodies, credentials or internal exception details.
     logger.error("Storage unavailable: %s", type(exc).__name__)
     return Response(
         {"status_code": 503, "detail": "Хранилище временно недоступно"}, status_code=503

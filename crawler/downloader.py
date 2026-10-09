@@ -37,7 +37,6 @@ class PublicResolver(ThreadedResolver):
         addresses = await super().resolve(host, port, family)
         for address in addresses:
             check_address(address["host"])
-        # The connector uses these checked addresses directly, without a second DNS lookup.
         return addresses
 
 
@@ -101,7 +100,6 @@ class Downloader:
 
     async def _request(self, url: str, max_bytes: int, delay: float = 1.0) -> FetchResponse:
         origin = self.check_url(url)
-        # Keep the domain state bounded; only evict idle entries whose delay has elapsed.
         if len(self.host_locks) >= 1024 and origin not in self.host_locks:
             expired = [
                 host

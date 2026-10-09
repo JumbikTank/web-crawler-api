@@ -98,10 +98,8 @@ async def test_s3_save_html_with_content() -> None:
 
         result = await service.save_html(raw_html)
 
-        # Verify the S3 key contains a valid SHA-256 hash
         assert result.startswith("s3://test_bucket/html/")
         assert result.endswith(".html")
-        # SHA-256 hash is 64 characters
         hash_part = result.split("/")[-1].replace(".html", "")
         assert len(hash_part) == 64
 

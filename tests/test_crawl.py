@@ -188,7 +188,7 @@ async def test_robots_and_redirects() -> None:
         assert requests.await_args_list[1].args[2] == 3
         with pytest.raises(DownloadError, match="robots.txt"):
             await downloader.fetch("https://site.example/blocked")
-    assert requests.await_count == 3  # Cached robots; the denied page was never requested.
+    assert requests.await_count == 3
 
 
 @pytest.mark.parametrize(
