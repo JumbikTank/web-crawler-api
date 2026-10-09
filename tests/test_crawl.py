@@ -394,7 +394,7 @@ async def test_bounded_domain_state(http_fixture: tuple[Downloader, str, list[st
     with pytest.raises(DownloadError) as error:
         await downloader._request(origin, 100)
     assert error.value.code == "busy"
-    downloader.last_request = dict.fromkeys(downloader.host_locks, 0)
+    downloader.last_request = dict.fromkeys(downloader.host_locks, monotonic() - 61)
     assert (await downloader._request(origin, 1000)).status == 200
 
 
