@@ -6,10 +6,10 @@ from pathlib import Path
 from time import monotonic
 from unittest.mock import AsyncMock, patch
 
-import aiohttp
 import pytest
 from aiohttp import web
-from aiohttp.abc import AbstractResolver, ResolveResult
+from curl_cffi.requests import RequestsError
+from curl_cffi.requests.exceptions import Timeout as CurlTimeout
 from litestar.testing import AsyncTestClient
 
 from crawler.app import create_app
@@ -19,7 +19,6 @@ from crawler.downloader import (
     Downloader,
     DownloadError,
     FetchResponse,
-    PublicResolver,
 )
 from crawler.extraction import extract_text
 
@@ -130,42 +129,21 @@ def test_public_literal_address() -> None:
 
 
 async def test_resolver_checks_actual_connection_addresses() -> None:
-    resolver = PublicResolver()
     for address in ["127.0.0.1", "192.168.1.1", "::1"]:
-        with patch(
-            "aiohttp.resolver.ThreadedResolver.resolve",
-            AsyncMock(
-                return_value=[
-                    {
-                        "hostname": "public.test",
-                        "host": address,
-                        "port": 80,
-                        "family": socket.AF_INET,
-                        "proto": 0,
-                        "flags": 0,
-                    }
-                ]
-            ),
-        ):
+        answers = [(socket.AF_INET, 0, 0, "", (address, 80))]
+        with patch("asyncio.BaseEventLoop.getaddrinfo", AsyncMock(return_value=answers)):
             with pytest.raises(DownloadError, match="публичные"):
-                await resolver.resolve("public.test", 80)
-    with patch(
-        "aiohttp.resolver.ThreadedResolver.resolve",
-        AsyncMock(
-            return_value=[
-                {
-                    "hostname": "public.test",
-                    "host": "1.1.1.1",
-                    "port": 80,
-                    "family": socket.AF_INET,
-                    "proto": 0,
-                    "flags": 0,
-                }
-            ]
-        ),
-    ):
-        assert (await resolver.resolve("public.test", 80))[0]["host"] == "1.1.1.1"
-    await resolver.close()
+                await Downloader.resolve("public.test", 80)
+    answers = [(socket.AF_INET, 0, 0, "", ("1.1.1.1", 80))]
+    with patch("asyncio.BaseEventLoop.getaddrinfo", AsyncMock(return_value=answers)):
+        assert await Downloader.resolve("public.test", 80) == ["1.1.1.1"]
+    mixed = answers + [(socket.AF_INET, 0, 0, "", ("127.0.0.1", 80))]
+    with patch("asyncio.BaseEventLoop.getaddrinfo", AsyncMock(return_value=mixed)):
+        with pytest.raises(DownloadError, match="публичные"):
+            await Downloader.resolve("public.test", 80)
+    with patch("asyncio.BaseEventLoop.getaddrinfo", AsyncMock(return_value=[])):
+        with pytest.raises(OSError, match="DNS"):
+            await Downloader.resolve("public.test", 80)
 
 
 async def test_robots_and_redirects() -> None:
@@ -272,7 +250,8 @@ async def test_robots_errors_limits_and_cache_expiry() -> None:
     ("exception", "code"),
     [
         (TimeoutError(), "timeout"),
-        (aiohttp.ClientConnectionError(), "network_error"),
+        (CurlTimeout("timed out"), "timeout"),
+        (RequestsError("connection failed"), "network_error"),
     ],
 )
 async def test_network_errors(exception: Exception, code: str) -> None:
@@ -294,27 +273,6 @@ async def test_redirect_cannot_target_private_network() -> None:
             await Downloader().fetch("https://example.com")
     assert error.value.code == "unsafe_url"
     assert requests.await_count == 2
-
-
-class FixtureResolver(AbstractResolver):
-    """Only used by the controlled HTTP fixture; never selected by application configuration."""
-
-    async def resolve(
-        self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
-    ) -> list[ResolveResult]:
-        return [
-            {
-                "hostname": host,
-                "host": "127.0.0.1",
-                "port": port,
-                "family": socket.AF_INET,
-                "proto": 0,
-                "flags": 0,
-            }
-        ]
-
-    async def close(self) -> None:
-        pass
 
 
 @pytest.fixture
@@ -351,14 +309,10 @@ async def http_fixture() -> AsyncIterator[tuple[Downloader, str, list[str]]]:
     await site.start()
     port = runner.addresses[0][1]
     downloader = Downloader()
-    downloader.session = aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(resolver=FixtureResolver()),
-        auto_decompress=False,
-    )
     try:
-        yield downloader, f"http://fixture.test:{port}", calls
+        with patch.object(Downloader, "resolve", AsyncMock(return_value=["127.0.0.1"])):
+            yield downloader, f"http://fixture.test:{port}", calls
     finally:
-        await downloader.close()
         await runner.cleanup()
 
 

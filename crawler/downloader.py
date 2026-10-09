@@ -3,11 +3,11 @@ import ipaddress
 import socket
 from dataclasses import dataclass
 from time import monotonic
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
-import aiohttp
-from aiohttp.abc import ResolveResult
-from aiohttp.resolver import ThreadedResolver
+from curl_cffi import CurlOpt
+from curl_cffi.requests import AsyncSession, RequestsError
+from curl_cffi.requests.exceptions import Timeout as CurlTimeout
 from protego import Protego
 
 from crawler.models import validate_url
@@ -30,16 +30,6 @@ def check_address(address: str) -> None:
         raise DownloadError("unsafe_url", "Разрешены только публичные IP-адреса")
 
 
-class PublicResolver(ThreadedResolver):
-    async def resolve(
-        self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
-    ) -> list[ResolveResult]:
-        addresses = await super().resolve(host, port, family)
-        for address in addresses:
-            check_address(address["host"])
-        return addresses
-
-
 @dataclass
 class FetchResponse:
     status: int
@@ -57,25 +47,25 @@ class DownloadedPage:
 
 class Downloader:
     def __init__(self) -> None:
-        self.session: aiohttp.ClientSession | None = None
         self.slots = asyncio.Semaphore(4)
         self.host_locks: dict[str, asyncio.Lock] = {}
         self.last_request: dict[str, float] = {}
         self.robots: dict[str, tuple[float, Protego]] = {}
 
-    async def start(self) -> None:
-        self.session = aiohttp.ClientSession(
-            connector=aiohttp.TCPConnector(resolver=PublicResolver(), ttl_dns_cache=60, limit=4),
-            timeout=aiohttp.ClientTimeout(total=10, connect=5),
-            headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"},
-            auto_decompress=False,
-            trust_env=False,
-            cookie_jar=aiohttp.DummyCookieJar(),
-        )
-
-    async def close(self) -> None:
-        if self.session is not None:
-            await self.session.close()
+    @staticmethod
+    async def resolve(host: str, port: int) -> list[str]:
+        try:
+            check_address(host)
+            return [host]
+        except ValueError:
+            pass
+        answers = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        addresses = list(dict.fromkeys(str(answer[4][0]) for answer in answers))
+        if not addresses:
+            raise OSError("DNS returned no addresses")
+        for address in addresses:
+            check_address(address)
+        return addresses
 
     @staticmethod
     def check_url(url: str) -> str:
@@ -114,28 +104,59 @@ class Downloader:
         lock = self.host_locks.setdefault(origin, asyncio.Lock())
         async with lock:
             await asyncio.sleep(max(0, self.last_request.get(origin, 0) + delay - monotonic()))
-            assert self.session is not None
             try:
-                async with self.session.get(url, allow_redirects=False) as response:
-                    if response.headers.get("Content-Encoding", "identity").lower() != "identity":
-                        raise DownloadError("encoding", "Сервер не поддержал несжатый ответ")
-                    if response.content_length is not None and response.content_length > max_bytes:
-                        raise DownloadError("too_large", "Ответ превышает допустимый размер")
-                    chunks = bytearray()
-                    async for chunk in response.content.iter_chunked(16_384):
-                        chunks.extend(chunk)
-                        if len(chunks) > max_bytes:
+                parts = urlsplit(url)
+                host = urlsplit(origin).hostname or ""
+                port = parts.port or (443 if parts.scheme == "https" else 80)
+                addresses = await self.resolve(host, port)
+                request_url = urlunsplit(
+                    (parts.scheme, urlsplit(origin).netloc, parts.path, parts.query, "")
+                )
+                pinned = ",".join(
+                    f"[{address}]" if ":" in address else address for address in addresses
+                )
+                async with AsyncSession(
+                    headers={"User-Agent": USER_AGENT},
+                    timeout=(5, 10),
+                    trust_env=False,
+                    discard_cookies=True,
+                    curl_options={
+                        CurlOpt.RESOLVE: [f"{host}:{port}:{pinned}"],
+                        CurlOpt.HTTP_CONTENT_DECODING: 0,
+                        CurlOpt.NOPROXY: "*",
+                    },
+                ) as session:
+                    async with session.stream(
+                        "GET", request_url, allow_redirects=False, accept_encoding="identity"
+                    ) as response:
+                        encoding = response.headers.get("Content-Encoding", "identity").lower()
+                        if encoding != "identity":
+                            raise DownloadError("encoding", "Сервер не поддержал несжатый ответ")
+                        length = response.headers.get("Content-Length")
+                        if length is not None and length.isdecimal() and int(length) > max_bytes:
                             raise DownloadError("too_large", "Ответ превышает допустимый размер")
-                    try:
-                        body = chunks.decode(response.charset or "utf-8", errors="replace")
-                    except LookupError:
-                        body = chunks.decode("utf-8", errors="replace")
-                    return FetchResponse(
-                        response.status,
-                        body,
-                        response.content_type,
-                        response.headers.get("Location"),
-                    )
+                        chunks = bytearray()
+                        async for chunk in response.aiter_content():
+                            chunks.extend(chunk)
+                            if len(chunks) > max_bytes:
+                                raise DownloadError(
+                                    "too_large", "Ответ превышает допустимый размер"
+                                )
+                        try:
+                            body = chunks.decode(
+                                response.charset_encoding or "utf-8", errors="replace"
+                            )
+                        except LookupError:
+                            body = chunks.decode("utf-8", errors="replace")
+                        content_type = (
+                            response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+                        )
+                        return FetchResponse(
+                            response.status_code,
+                            body,
+                            content_type,
+                            response.headers.get("Location"),
+                        )
             finally:
                 self.last_request[origin] = monotonic()
 
@@ -189,7 +210,7 @@ class Downloader:
                         raise DownloadError("html_size", "HTML пуст или превышает 1 МиБ в UTF-8")
                     return DownloadedPage(url, response.body, response.status)
                 raise DownloadError("redirect_limit", "Слишком много перенаправлений страницы")
-        except TimeoutError as exc:
+        except (TimeoutError, CurlTimeout) as exc:
             raise DownloadError("timeout", "Истекло время скачивания") from exc
-        except (aiohttp.ClientError, OSError) as exc:
+        except (RequestsError, OSError) as exc:
             raise DownloadError("network_error", "Не удалось подключиться к сайту") from exc

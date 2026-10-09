@@ -205,8 +205,6 @@ def create_app(settings: Settings | None = None) -> Litestar:
         metadata = DynamoDBService(settings.table_name, settings.region, settings.endpoint_url)
         html = S3Service(settings.bucket_name, settings.region, settings.endpoint_url)
 
-    startup.append(downloader.start)
-
     return Litestar(
         route_handlers=[
             create_url,
@@ -223,7 +221,6 @@ def create_app(settings: Settings | None = None) -> Litestar:
         ],
         state=State({"dynamo_service": metadata, "s3_service": html, "downloader": downloader}),
         on_startup=startup,
-        on_shutdown=[downloader.close],
         request_max_body_size=8 * 1024 * 1024,
         exception_handlers={
             sqlite3.Error: storage_error,
