@@ -28,6 +28,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!/client/src/lib/
+!/client/src/lib/**
 lib64/
 parts/
 sdist/
@@ -44,3 +46,12 @@ data/
 *.sqlite3-shm
 .env
 .DS_Store
+
+# React client
+client/node_modules/
+client/.output/
+client/.tanstack/
+client/dist/
+client/test-results/
+client/playwright-report/
+client/.e2e/

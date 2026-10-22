@@ -1,10 +1,19 @@
 # Краулер заданных URL
 
-Сервер принимает список веб-адресов, скачивает разрешённые HTML-страницы и сохраняет их. По API можно получить результат обработки каждого адреса, исходный HTML, текст страницы и метаданные. Клиентская часть будет в следующей части ДЗ.
+Приложение принимает список веб-адресов, скачивает разрешённые HTML-страницы и сохраняет их. В React-клиенте можно запустить обход, увидеть результат каждого адреса, открыть исходный HTML, извлечённый текст и метаданные, найти или удалить запись.
 
 Основа идеи — [схема в Excalidraw](schemas/internet_scraper.excalidraw) и её [SVG-версия](schemas/internet_crawler.svg): приём URL, проверка robots.txt, скачивание, сохранение HTML и метаданных, разбор страницы. Для этого задания сервер обходит **только переданные адреса**. Ссылки, найденные в HTML, не становятся новыми задачами.
 
-Стек: Python 3.12, Litestar, `curl_cffi` (libcurl) для HTTP-запросов, Protego, selectolax с парсером Lexbor на C, SQLite. Сохранены адаптеры исходного проекта для DynamoDB и S3.
+Сервер: Python 3.12, Litestar, `curl_cffi` (libcurl) для HTTP-запросов, Protego, selectolax с парсером Lexbor на C, SQLite. Клиент: React 19, TypeScript, TanStack Start, TanStack Query, Zod. Сохранены серверные адаптеры исходного проекта для DynamoDB и S3.
+
+## Возможности клиента
+
+- Обход 1–20 заданных URL: проверка адресов до отправки, удаление повторов, индикатор загрузки и результаты по каждому URL, включая ошибки HTTP и robots.txt.
+- Каталог с числом сохранённых страниц, числом уникальных HTML, поиском по URL на текущей странице, фильтром по полному SHA-256 и постраничной навигацией.
+- Просмотр извлечённого текста, исходного HTML и метаданных страницы; удаление URL из каталога.
+- Сообщения об ошибках API и адаптивный интерфейс для компьютера и телефона.
+
+TanStack Start обращается к Python API через серверные функции. Адрес API задаётся переменной `CRAWLER_API_URL`; по умолчанию это `http://127.0.0.1:8000`. Поэтому браузеру не нужен отдельный CORS-доступ к Python-серверу.
 
 ## Функциональные требования
 
@@ -36,9 +45,9 @@
 | N9 | Воспроизводимо запускаться на новой машине. | Python 3.12, `uv sync --frozen`, SQLite без внешних сервисов; путь БД и настройки AWS задаются через окружение. |
 | N10 | Проходить автоматические проверки. | Тесты, Ruff, Black, isort и mypy проходят в GitHub Actions; покрытие серверного кода — не ниже 90%. |
 
-## Запуск
+## Запуск клиента и сервера
 
-Понадобится [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Понадобятся [uv](https://docs.astral.sh/uv/getting-started/installation/) и Node.js 24+ с npm. Из корня репозитория запустите сервер в первом терминале:
 
 ```bash
 git clone https://github.com/JumbikTank/web-crawler-api.git
@@ -47,7 +56,17 @@ uv sync --frozen
 uv run --frozen uvicorn crawler.app:app --host 127.0.0.1 --port 8000
 ```
 
-Документация API: <http://127.0.0.1:8000/schema/swagger>. По умолчанию база создаётся в `data/crawler.sqlite3`.
+Во втором терминале из корня репозитория запустите клиент:
+
+```bash
+cd client
+npm ci
+npm run dev
+```
+
+Откройте <http://127.0.0.1:3000>. Документация Python API: <http://127.0.0.1:8000/schema/swagger>. По умолчанию база создаётся в `data/crawler.sqlite3`. Если сервер работает по другому адресу, задайте `CRAWLER_API_URL` перед запуском клиента. Для проверки production-сборки клиента: `npm run build && npm run start`.
+
+Без клиента API можно вызвать напрямую:
 
 ```bash
 curl http://127.0.0.1:8000/crawl \
@@ -71,9 +90,27 @@ uv run --frozen ruff check crawler tests
 uv run --frozen black --check crawler tests
 uv run --frozen isort --check-only crawler tests
 uv run --frozen mypy crawler tests
+
+cd client
+npm ci
+npm run build
+npm run typecheck
+npm run format:check
+npx playwright install chromium
+npm run test:e2e
 ```
 
-Тесты используют временную SQLite и контролируемый HTTP-сайт. Доступ к настоящему AWS не требуется. GitHub Actions запускает те же проверки.
+Python-тесты используют временную SQLite и контролируемый HTTP-сайт. Playwright-тест самостоятельно запускает отдельные экземпляры Python API и клиента на портах `8100` и `3100`, обходит реальный `https://example.com`, проверяет сохранение через API, показывает ошибку для отсутствующей страницы, просматривает данные и удаляет запись. Для него нужен доступ к сети; настоящий AWS не нужен. GitHub Actions проверяет Python-тесты и сборку/типы клиента.
+
+## Скриншоты и видео
+
+![Главная панель клиента](docs/screenshots/overview.png)
+
+![Результат обхода и архив](docs/screenshots/crawl-results.png)
+
+![Просмотр извлечённого текста](docs/screenshots/page-details.png)
+
+[Видео полного сценария в браузере (MP4, ~20 с)](docs/demo.mp4) записано во время прохода Playwright-теста: валидация URL → загрузка успешной и ошибочной страницы → текст/HTML/метаданные → фильтр SHA-256 → удаление. Видео хранится в этом публичном репозитории.
 
 ## Хранение
 
