@@ -39,6 +39,15 @@ export const getCatalog = createServerFn({ method: "GET" })
     return requestApi<CatalogPage>(`/urls?${params}`);
   });
 
+export const getPageMeta = createServerFn({ method: "GET" })
+  .validator(z.object({ url: webUrl }))
+  .handler(async ({ data }): Promise<StoredPage> => {
+    const { requestApi } = await import("./api.server");
+    return requestApi<StoredPage>(
+      `/url-data?${new URLSearchParams({ url: data.url })}`,
+    );
+  });
+
 export const crawlPages = createServerFn({ method: "POST" })
   .validator(z.object({ urls: z.array(webUrl).min(1).max(20) }))
   .handler(async ({ data }): Promise<CrawlResult> => {

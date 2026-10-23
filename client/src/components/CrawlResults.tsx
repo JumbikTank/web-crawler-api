@@ -8,9 +8,15 @@ export function CrawlResults({
   onOpen: (url: string) => void;
 }) {
   return (
-    <section className="section" aria-labelledby="results-heading">
+    <section
+      className="section results-section"
+      aria-labelledby="results-heading"
+    >
       <div className="section-title">
-        <h2 id="results-heading">Результаты обхода</h2>
+        <div>
+          <span className="eyebrow">Готово</span>
+          <h2 id="results-heading">Результаты обхода</h2>
+        </div>
         <span>
           {result.saved} сохранено · {result.failed} ошибок
         </span>
@@ -38,7 +44,7 @@ export function CrawlResults({
                 type="button"
                 onClick={() => onOpen(item.url)}
               >
-                Открыть
+                Открыть ↗
               </button>
             )}
           </li>

@@ -15,14 +15,14 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
 
   const input = page.getByRole("textbox", { name: "URL-адреса" });
   await input.fill("this-is-not-a-url");
-  await page.getByRole("button", { name: "Начать обход" }).click();
+  await page.getByRole("button", { name: /Начать обход/ }).click();
   await expect(
     page.getByText("Некорректный URL: this-is-not-a-url"),
   ).toBeVisible();
   await page.waitForTimeout(1500);
 
   await input.fill("https://example.com\nhttps://example.com/no-such-page");
-  await page.getByRole("button", { name: "Начать обход" }).click();
+  await page.getByRole("button", { name: /Начать обход/ }).click();
   await expect(page.getByText("1 сохранено · 1 ошибок")).toBeVisible({
     timeout: 30_000,
   });
@@ -38,7 +38,10 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
   const stored = (await metadata.json()) as { content_hash: string };
   expect(stored.content_hash).toMatch(/^[a-f0-9]{64}$/);
 
-  await page.getByRole("button", { name: "Открыть" }).first().click();
+  await page
+    .getByRole("button", { name: /Открыть/ })
+    .first()
+    .click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(
     page.getByText("This domain is for use in documentation examples"),
@@ -49,18 +52,15 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
   await page.getByRole("tab", { name: "HTML" }).click();
   await expect(page.locator("pre")).toContainText("<!doctype html>");
   await page.waitForTimeout(1500);
-  await page.getByRole("tab", { name: "Метаданные" }).click();
-  await expect(
-    page.locator("dd").filter({ hasText: stored.content_hash }),
-  ).toBeVisible();
+  await page.getByRole("tab", { name: "О странице" }).click();
+  await expect(page.getByText("HTML-страница")).toBeVisible();
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Закрыть" }).click();
 
-  await page.locator("summary").click();
   await page
-    .getByRole("textbox", { name: "Фильтр по SHA-256" })
-    .fill(stored.content_hash);
-  await page.getByRole("button", { name: "Применить" }).click();
+    .getByRole("textbox", { name: "Найти URL в архиве" })
+    .fill("https://example.com");
+  await page.getByRole("button", { name: "Найти", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Удалить https://example.com" }),
   ).toBeVisible();
@@ -68,7 +68,9 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
   await page
     .getByRole("button", { name: "Удалить https://example.com" })
     .click();
-  await expect(page.getByText("Страниц с таким хешем нет.")).toBeVisible();
+  await expect(
+    page.getByText("Страница с таким адресом не найдена."),
+  ).toBeVisible();
   const missing = await request.get("http://127.0.0.1:8100/url-data", {
     params: { url: "https://example.com" },
   });

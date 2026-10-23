@@ -31,6 +31,7 @@ function Dashboard() {
     onSuccess: (data) => {
       setResult(data);
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      void queryClient.invalidateQueries({ queryKey: ["lookup"] });
       void queryClient.invalidateQueries({ queryKey: ["stats"] });
     },
     onError: (error) => setActionError(errorText(error)),
@@ -41,6 +42,7 @@ function Dashboard() {
     onSuccess: (_, url) => {
       if (selectedUrl === url) setSelectedUrl(null);
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      void queryClient.invalidateQueries({ queryKey: ["lookup"] });
       void queryClient.invalidateQueries({ queryKey: ["stats"] });
     },
     onError: (error) => setActionError(errorText(error)),
@@ -49,7 +51,13 @@ function Dashboard() {
   return (
     <main className="workspace" data-hydrated={hydrated}>
       <header className="site-header">
-        <strong>Краулер</strong>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          <strong>
+            trace<span>.</span>
+          </strong>
+          <small>WEB ARCHIVE</small>
+        </div>
         <span className={stats.isError ? "connection offline" : "connection"}>
           <i aria-hidden="true" />
           {stats.isPending
@@ -61,15 +69,23 @@ function Dashboard() {
       </header>
 
       <div className="intro">
-        <h1>Обход веб-страниц</h1>
-        <p>
-          Укажите адреса, чтобы сохранить HTML и прочитать извлечённый текст.
-        </p>
-        {stats.data && (
-          <p className="archive-count">
-            В архиве {stats.data.total_urls} URL · {stats.data.unique_contents}{" "}
-            уникальных HTML
+        <div className="intro-copy">
+          <span className="eyebrow">Ваш персональный веб-архив</span>
+          <h1>
+            Сохраняйте страницы.
+            <br />
+            <em>Исследуйте содержимое.</em>
+          </h1>
+          <p>
+            Задайте адреса, запустите обход и возвращайтесь к тексту или
+            исходному HTML в любой момент.
           </p>
+        </div>
+        {stats.data && (
+          <div className="archive-count">
+            <strong>{stats.data.total_urls}</strong>
+            <span>страниц в архиве</span>
+          </div>
         )}
       </div>
 
@@ -82,16 +98,18 @@ function Dashboard() {
         </Notice>
       )}
       {actionError && <Notice kind="error">{actionError}</Notice>}
-      <CrawlForm
-        onSubmit={(urls) => crawl.mutate(urls)}
-        pending={crawl.isPending}
-      />
-      {result && <CrawlResults result={result} onOpen={setSelectedUrl} />}
-      <PageCatalog
-        onOpen={setSelectedUrl}
-        onDelete={(url) => remove.mutate(url)}
-        deletingUrl={remove.isPending ? remove.variables : null}
-      />
+      <div className="dashboard-grid">
+        <CrawlForm
+          onSubmit={(urls) => crawl.mutate(urls)}
+          pending={crawl.isPending}
+        />
+        {result && <CrawlResults result={result} onOpen={setSelectedUrl} />}
+        <PageCatalog
+          onOpen={setSelectedUrl}
+          onDelete={(url) => remove.mutate(url)}
+          deletingUrl={remove.isPending ? remove.variables : null}
+        />
+      </div>
       <PageDetails
         url={selectedUrl}
         onClose={() => setSelectedUrl(null)}

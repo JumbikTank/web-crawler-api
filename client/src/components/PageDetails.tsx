@@ -81,7 +81,7 @@ export function PageDetails({
                     ? "Текст"
                     : key === "html"
                       ? "HTML"
-                      : "Метаданные"}
+                      : "О странице"}
                 </button>
               ))}
             </div>
@@ -97,17 +97,12 @@ export function PageDetails({
                     <dd>{details.data.url}</dd>
                   </div>
                   <div>
-                    <dt>Отпечаток HTML</dt>
-                    <dd>
-                      {details.data.content_hash ?? "—"}
-                      <small>
-                        SHA-256 позволяет найти страницы с таким же содержимым.
-                      </small>
-                    </dd>
-                  </div>
-                  <div>
                     <dt>Сохранено</dt>
                     <dd>{formatDate(details.data.last_crawled_time)}</dd>
+                  </div>
+                  <div>
+                    <dt>Формат</dt>
+                    <dd>HTML-страница</dd>
                   </div>
                 </dl>
               )}

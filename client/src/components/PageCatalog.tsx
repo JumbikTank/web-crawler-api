@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getCatalog } from "../lib/api.functions";
+import { getCatalog, getPageMeta } from "../lib/api.functions";
 import { errorText, formatDate } from "../lib/format";
+import { parseUrls } from "../lib/validation";
 import type { StoredPage } from "../lib/types";
 import { Notice } from "./Notice";
 
@@ -15,34 +16,32 @@ export function PageCatalog({
   deletingUrl: string | null;
 }) {
   const queryClient = useQueryClient();
-  const [hashInput, setHashInput] = useState("");
-  const [hash, setHash] = useState<string | null>(null);
-  const [filterError, setFilterError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchedUrl, setSearchedUrl] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
 
   const catalog = useQuery({
-    queryKey: ["catalog", hash, cursors[page]],
-    queryFn: () => getCatalog({ data: { hash, cursor: cursors[page] } }),
+    queryKey: ["catalog", cursors[page]],
+    queryFn: () => getCatalog({ data: { hash: null, cursor: cursors[page] } }),
+  });
+  const found = useQuery({
+    queryKey: ["lookup", searchedUrl],
+    queryFn: () => getPageMeta({ data: { url: searchedUrl! } }),
+    enabled: Boolean(searchedUrl),
+    retry: false,
   });
 
-  function resetPage() {
-    setPage(0);
-    setCursors([null]);
-  }
-
-  function applyFilter(event: FormEvent<HTMLFormElement>) {
+  function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const value = hashInput.trim().toLowerCase();
-    if (value && !/^[a-f0-9]{64}$/.test(value)) {
-      setFilterError(
-        "Введите полный SHA-256: 64 символа от 0 до 9 и от a до f.",
-      );
+    const parsed = parseUrls(searchInput);
+    if (parsed.error || parsed.urls.length !== 1) {
+      setSearchError(parsed.error ?? "Введите один URL-адрес.");
       return;
     }
-    setFilterError(null);
-    setHash(value || null);
-    resetPage();
+    setSearchError(null);
+    setSearchedUrl(parsed.urls[0]);
   }
 
   function nextPage() {
@@ -55,61 +54,90 @@ export function PageCatalog({
   }
 
   return (
-    <section className="section" aria-labelledby="catalog-heading">
+    <section
+      className="section catalog-section"
+      aria-labelledby="catalog-heading"
+    >
       <div className="section-title">
-        <h2 id="catalog-heading">Сохранённые страницы</h2>
+        <div>
+          <span className="eyebrow">02 / Ваша библиотека</span>
+          <h2 id="catalog-heading">Архив страниц</h2>
+        </div>
         <button
           className="text-button"
           type="button"
-          onClick={() =>
-            void queryClient.invalidateQueries({ queryKey: ["catalog"] })
-          }
+          onClick={() => {
+            void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+            void queryClient.invalidateQueries({ queryKey: ["lookup"] });
+          }}
         >
-          Обновить
+          Обновить ↗
         </button>
       </div>
 
-      <details className="filter-details">
-        <summary>
-          Поиск страниц с одинаковым HTML {hash && "· фильтр активен"}
-        </summary>
-        <p className="filter-help">
-          Для поиска вставьте SHA-256 из метаданных страницы. Это отпечаток её
-          HTML.
-        </p>
-        <form onSubmit={applyFilter} className="filter-form">
-          <input
-            type="text"
-            aria-label="Фильтр по SHA-256"
-            value={hashInput}
-            onChange={(event) => {
-              setHashInput(event.target.value);
-              setFilterError(null);
+      <form className="search-form" onSubmit={search}>
+        <label className="sr-only" htmlFor="catalog-search">
+          Найти URL в архиве
+        </label>
+        <input
+          id="catalog-search"
+          type="url"
+          value={searchInput}
+          onChange={(event) => {
+            setSearchInput(event.target.value);
+            setSearchError(null);
+          }}
+          placeholder="Найти страницу по URL"
+        />
+        <button className="button button-secondary" type="submit">
+          Найти
+        </button>
+        {searchedUrl && (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setSearchedUrl(null);
+              setSearchInput("");
+              setSearchError(null);
             }}
-            placeholder="Полный SHA-256, 64 символа"
-          />
-          <button className="button button-secondary" type="submit">
-            Применить
+          >
+            Сбросить
           </button>
-          {hash && (
-            <button
-              className="text-button"
-              type="button"
-              onClick={() => {
-                setHash(null);
-                setHashInput("");
-                setFilterError(null);
-                resetPage();
+        )}
+      </form>
+      {searchError && <Notice kind="error">{searchError}</Notice>}
+
+      {searchedUrl ? (
+        found.isPending ? (
+          <p className="list-state" role="status">
+            Ищем страницу…
+          </p>
+        ) : found.isError ? (
+          /404|not found|не найден/i.test(errorText(found.error)) ? (
+            <p className="list-state">Страница с таким адресом не найдена.</p>
+          ) : (
+            <Notice
+              kind="error"
+              action={{
+                label: "Повторить",
+                onClick: () => void found.refetch(),
               }}
             >
-              Сбросить
-            </button>
-          )}
-        </form>
-        {filterError && <Notice kind="error">{filterError}</Notice>}
-      </details>
-
-      {catalog.isPending ? (
+              {errorText(found.error)}
+            </Notice>
+          )
+        ) : (
+          <ul className="catalog-list">
+            <PageRow
+              item={found.data}
+              onOpen={() => onOpen(found.data.url)}
+              onDelete={() => onDelete(found.data.url)}
+              deleting={deletingUrl === found.data.url}
+            />
+          </ul>
+        )
+      ) : catalog.isPending ? (
         <p className="list-state" role="status">
           Загружаем архив…
         </p>
@@ -121,11 +149,10 @@ export function PageCatalog({
           {errorText(catalog.error)}
         </Notice>
       ) : catalog.data.items.length === 0 ? (
-        <p className="list-state">
-          {hash
-            ? "Страниц с таким хешем нет."
-            : "Пока пусто. Запустите обход выше."}
-        </p>
+        <div className="empty-state">
+          <span aria-hidden="true">↗</span>
+          <p>Здесь появятся страницы после первого обхода.</p>
+        </div>
       ) : (
         <ul className="catalog-list">
           {catalog.data.items.map((item) => (
@@ -140,27 +167,29 @@ export function PageCatalog({
         </ul>
       )}
 
-      <div className="pagination">
-        <span>Страница {page + 1}</span>
-        <div>
-          <button
-            className="button button-secondary"
-            type="button"
-            disabled={page === 0 || catalog.isFetching}
-            onClick={() => setPage((current) => current - 1)}
-          >
-            Назад
-          </button>
-          <button
-            className="button button-secondary"
-            type="button"
-            disabled={!catalog.data?.next_cursor || catalog.isFetching}
-            onClick={nextPage}
-          >
-            Далее
-          </button>
+      {!searchedUrl && (
+        <div className="pagination">
+          <span>Страница {page + 1}</span>
+          <div>
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={page === 0 || catalog.isFetching}
+              onClick={() => setPage((current) => current - 1)}
+            >
+              Назад
+            </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={!catalog.data?.next_cursor || catalog.isFetching}
+              onClick={nextPage}
+            >
+              Далее
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -176,15 +205,20 @@ function PageRow({
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const hostname = new URL(item.url).hostname;
   return (
     <li className="catalog-row">
+      <div className="site-avatar" aria-hidden="true">
+        {hostname.charAt(0).toUpperCase()}
+      </div>
       <div className="page-summary">
-        <strong>{item.url}</strong>
+        <strong>{hostname}</strong>
+        <span className="page-url">{item.url}</span>
         <span>Сохранено {formatDate(item.last_crawled_time)}</span>
       </div>
       <div className="row-actions">
         <button className="text-button" type="button" onClick={onOpen}>
-          Открыть
+          Открыть ↗
         </button>
         <button
           className="text-button danger-text"

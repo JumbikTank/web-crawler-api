@@ -20,10 +20,13 @@ export function CrawlForm({
   }
 
   return (
-    <section className="section" aria-labelledby="crawl-heading">
+    <section className="section crawl-section" aria-labelledby="crawl-heading">
       <div className="section-title">
-        <h2 id="crawl-heading">Новый обход</h2>
-        <span>Только указанные адреса · до 20 URL</span>
+        <div>
+          <span className="eyebrow">01 / Новый обход</span>
+          <h2 id="crawl-heading">Добавить страницы</h2>
+        </div>
+        <span>До 20 адресов</span>
       </div>
       <form onSubmit={submit}>
         <label htmlFor="url-input">URL-адреса</label>
@@ -42,14 +45,14 @@ export function CrawlForm({
         />
         <div className="form-footer">
           <span id="url-help">
-            По одному адресу на строку. Найденные ссылки не обходятся.
+            По одному URL на строку. Обходим только указанные страницы.
           </span>
           <button
             className="button button-primary"
             disabled={pending}
             type="submit"
           >
-            {pending ? "Выполняется…" : "Начать обход"}
+            {pending ? "Сохраняем страницы…" : "Начать обход ↗"}
           </button>
         </div>
         {error && (
