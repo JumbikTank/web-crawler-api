@@ -30,9 +30,13 @@ export function CrawlResults({
                 <strong>{item.url}</strong>
                 <small>
                   {item.status === "saved"
-                    ? `Сохранено · HTTP ${item.http_status}`
+                    ? "Сохранено"
                     : `${item.detail}${item.http_status ? ` · HTTP ${item.http_status}` : ""}`}
                 </small>
+                {item.status === "saved" &&
+                  new URL(item.final_url).href !== new URL(item.url).href && (
+                    <small>Перенаправлено на {item.final_url}</small>
+                  )}
               </div>
             </div>
             {item.status === "saved" && (
