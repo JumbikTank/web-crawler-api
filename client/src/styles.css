@@ -297,6 +297,12 @@ input:focus {
   cursor: pointer;
   width: fit-content;
 }
+.filter-help {
+  margin: 10px 0 0;
+  color: #78828d;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .filter-form {
   margin-top: 14px;
   display: flex;
@@ -413,6 +419,12 @@ input:focus {
 .metadata dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.metadata dd small {
+  display: block;
+  margin-top: 6px;
+  color: #84909d;
+  font-size: 12px;
 }
 .dialog-footer {
   border-top: 1px solid #edf0f2;

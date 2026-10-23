@@ -4,6 +4,9 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
   page,
   request,
 }) => {
+  await request.delete("http://127.0.0.1:8100/url-data", {
+    params: { url: "https://example.com" },
+  });
   await page.goto("/");
   await expect(page.locator('[data-hydrated="true"]')).toBeVisible();
   await expect(page.getByText("Сервер подключён")).toBeVisible();
@@ -25,8 +28,6 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
   });
   await expect(page.getByText(/HTTP 404/)).toBeVisible();
   await page.waitForTimeout(1300);
-  await page.getByText("Результаты обхода").scrollIntoViewIfNeeded();
-  await page.evaluate(() => window.scrollBy(0, 130));
   await page.screenshot({ path: "../docs/screenshots/crawl-results.png" });
   await page.waitForTimeout(1100);
 
@@ -50,7 +51,7 @@ test("URL validation, crawl, archive, page views and deletion reach the Python s
   await page.waitForTimeout(1500);
   await page.getByRole("tab", { name: "Метаданные" }).click();
   await expect(
-    page.getByText(stored.content_hash, { exact: true }),
+    page.locator("dd").filter({ hasText: stored.content_hash }),
   ).toBeVisible();
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Закрыть" }).click();

@@ -9,10 +9,6 @@ export function formatDate(timestamp: number | null | undefined): string {
   }).format(timestamp * 1000);
 }
 
-export function shortHash(hash: string | null | undefined): string {
-  return hash ? `${hash.slice(0, 10)}…${hash.slice(-6)}` : "—";
-}
-
 export function errorText(error: unknown): string {
   return error instanceof Error
     ? error.message

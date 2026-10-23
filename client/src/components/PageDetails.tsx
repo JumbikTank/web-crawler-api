@@ -97,16 +97,17 @@ export function PageDetails({
                     <dd>{details.data.url}</dd>
                   </div>
                   <div>
-                    <dt>SHA-256</dt>
-                    <dd>{details.data.content_hash ?? "—"}</dd>
+                    <dt>Отпечаток HTML</dt>
+                    <dd>
+                      {details.data.content_hash ?? "—"}
+                      <small>
+                        SHA-256 позволяет найти страницы с таким же содержимым.
+                      </small>
+                    </dd>
                   </div>
                   <div>
                     <dt>Сохранено</dt>
                     <dd>{formatDate(details.data.last_crawled_time)}</dd>
-                  </div>
-                  <div>
-                    <dt>Хранилище</dt>
-                    <dd>{details.data.s3_link ?? "—"}</dd>
                   </div>
                 </dl>
               )}

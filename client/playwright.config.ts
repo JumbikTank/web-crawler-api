@@ -10,8 +10,8 @@ export default defineConfig({
   use: {
     ...devices["Desktop Chrome"],
     baseURL: "http://127.0.0.1:3100",
-    viewport: { width: 1440, height: 900 },
-    video: { mode: "on", size: { width: 1440, height: 900 } },
+    viewport: { width: 1440, height: 1100 },
+    video: { mode: "on", size: { width: 1440, height: 1100 } },
     screenshot: "only-on-failure",
   },
   webServer: [

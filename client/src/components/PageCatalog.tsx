@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCatalog } from "../lib/api.functions";
-import { errorText, formatDate, shortHash } from "../lib/format";
+import { errorText, formatDate } from "../lib/format";
 import type { StoredPage } from "../lib/types";
 import { Notice } from "./Notice";
 
@@ -70,7 +70,13 @@ export function PageCatalog({
       </div>
 
       <details className="filter-details">
-        <summary>Фильтр по SHA-256 {hash && `· ${shortHash(hash)}`}</summary>
+        <summary>
+          Поиск страниц с одинаковым HTML {hash && "· фильтр активен"}
+        </summary>
+        <p className="filter-help">
+          Для поиска вставьте SHA-256 из метаданных страницы. Это отпечаток её
+          HTML.
+        </p>
         <form onSubmit={applyFilter} className="filter-form">
           <input
             type="text"
@@ -174,10 +180,7 @@ function PageRow({
     <li className="catalog-row">
       <div className="page-summary">
         <strong>{item.url}</strong>
-        <span>
-          {formatDate(item.last_crawled_time)} · SHA-256{" "}
-          {shortHash(item.content_hash)}
-        </span>
+        <span>Сохранено {formatDate(item.last_crawled_time)}</span>
       </div>
       <div className="row-actions">
         <button className="text-button" type="button" onClick={onOpen}>
