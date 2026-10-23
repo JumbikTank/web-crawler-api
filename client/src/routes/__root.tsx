@@ -6,15 +6,13 @@ import {
   createRootRoute,
 } from "@tanstack/react-router";
 import "../styles.css";
-import "@fontsource-variable/space-grotesk";
-import "@fontsource-variable/dm-sans";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Trace — ваш веб-архив" },
+      { title: "Краулер — архив страниц" },
       {
         name: "description",
         content: "Обход заданных веб-страниц с просмотром HTML и текста",

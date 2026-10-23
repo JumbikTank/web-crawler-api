@@ -22,11 +22,8 @@ export function CrawlForm({
   return (
     <section className="section crawl-section" aria-labelledby="crawl-heading">
       <div className="section-title">
-        <div>
-          <span className="eyebrow">01 / Новый обход</span>
-          <h2 id="crawl-heading">Добавить страницы</h2>
-        </div>
-        <span>До 20 адресов</span>
+        <h2 id="crawl-heading">Новый обход</h2>
+        <span>До 20 URL</span>
       </div>
       <form onSubmit={submit}>
         <label htmlFor="url-input">URL-адреса</label>
@@ -52,7 +49,7 @@ export function CrawlForm({
             disabled={pending}
             type="submit"
           >
-            {pending ? "Сохраняем страницы…" : "Начать обход ↗"}
+            {pending ? "Сохраняем страницы…" : "Начать обход"}
           </button>
         </div>
         {error && (

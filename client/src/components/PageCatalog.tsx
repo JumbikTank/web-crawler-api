@@ -59,10 +59,7 @@ export function PageCatalog({
       aria-labelledby="catalog-heading"
     >
       <div className="section-title">
-        <div>
-          <span className="eyebrow">02 / Ваша библиотека</span>
-          <h2 id="catalog-heading">Архив страниц</h2>
-        </div>
+        <h2 id="catalog-heading">Архив</h2>
         <button
           className="text-button"
           type="button"
@@ -71,7 +68,7 @@ export function PageCatalog({
             void queryClient.invalidateQueries({ queryKey: ["lookup"] });
           }}
         >
-          Обновить ↗
+          Обновить
         </button>
       </div>
 
@@ -150,8 +147,8 @@ export function PageCatalog({
         </Notice>
       ) : catalog.data.items.length === 0 ? (
         <div className="empty-state">
-          <span aria-hidden="true">↗</span>
-          <p>Здесь появятся страницы после первого обхода.</p>
+          <p>Пока нет сохранённых страниц.</p>
+          <span>Добавьте адреса и запустите обход.</span>
         </div>
       ) : (
         <ul className="catalog-list">
@@ -208,9 +205,6 @@ function PageRow({
   const hostname = new URL(item.url).hostname;
   return (
     <li className="catalog-row">
-      <div className="site-avatar" aria-hidden="true">
-        {hostname.charAt(0).toUpperCase()}
-      </div>
       <div className="page-summary">
         <strong>{hostname}</strong>
         <span className="page-url">{item.url}</span>
@@ -218,7 +212,7 @@ function PageRow({
       </div>
       <div className="row-actions">
         <button className="text-button" type="button" onClick={onOpen}>
-          Открыть ↗
+          Открыть
         </button>
         <button
           className="text-button danger-text"

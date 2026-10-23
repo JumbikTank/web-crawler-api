@@ -13,10 +13,7 @@ export function CrawlResults({
       aria-labelledby="results-heading"
     >
       <div className="section-title">
-        <div>
-          <span className="eyebrow">Готово</span>
-          <h2 id="results-heading">Результаты обхода</h2>
-        </div>
+        <h2 id="results-heading">Результаты</h2>
         <span>
           {result.saved} сохранено · {result.failed} ошибок
         </span>
@@ -44,7 +41,7 @@ export function CrawlResults({
                 type="button"
                 onClick={() => onOpen(item.url)}
               >
-                Открыть ↗
+                Открыть
               </button>
             )}
           </li>

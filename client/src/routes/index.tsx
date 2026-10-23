@@ -51,13 +51,9 @@ function Dashboard() {
   return (
     <main className="workspace" data-hydrated={hydrated}>
       <header className="site-header">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <strong>
-            trace<span>.</span>
-          </strong>
-          <small>WEB ARCHIVE</small>
-        </div>
+        <strong className="brand">
+          Краулер<span> / веб-архив</span>
+        </strong>
         <span className={stats.isError ? "connection offline" : "connection"}>
           <i aria-hidden="true" />
           {stats.isPending
@@ -70,21 +66,16 @@ function Dashboard() {
 
       <div className="intro">
         <div className="intro-copy">
-          <span className="eyebrow">Ваш персональный веб-архив</span>
-          <h1>
-            Сохраняйте страницы.
-            <br />
-            <em>Исследуйте содержимое.</em>
-          </h1>
+          <h1>Обход страниц</h1>
           <p>
-            Задайте адреса, запустите обход и возвращайтесь к тексту или
-            исходному HTML в любой момент.
+            Сохраняйте HTML по заданным адресам и просматривайте извлечённый
+            текст.
           </p>
         </div>
         {stats.data && (
           <div className="archive-count">
             <strong>{stats.data.total_urls}</strong>
-            <span>страниц в архиве</span>
+            <span>в архиве</span>
           </div>
         )}
       </div>
